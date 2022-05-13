@@ -1,5 +1,7 @@
 ###################################################################################################
-# Copyright(c) 2022 Enclustra GmbH, Switzerland (info@enclustra.com)
+#  Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+#  All rights reserved.
+#  Authors: Oliver Bruendler
 ###################################################################################################
 import sys
 sys.path.append("../../../model")
