@@ -74,10 +74,7 @@ class psi_fix_complex_mult:
             sumQ = PsiFixAdd(multIQ, self.mult4Fmt, multQI, self.mult4Fmt, self.outFmt, self.rnd, self.sat)
         else:
             # Common term
-            subA = PsiFixSub(aif, self.inAFmt, aqf, self.inAFmt, self.preAddAFmt, PsiFixRnd.Trunc, PsiFixSat.Wrap)   # preadder within Xilinx 7 series DSP slices features:
-                                                                                                                       # - 24-bit two complement operands
-                                                                                                                       # - 25-bit output
-                                                                                                                       # - no saturation logic
+            subA = PsiFixSub(aif, self.inAFmt, aqf, self.inAFmt, self.preAddAFmt, PsiFixRnd.Trunc, PsiFixSat.Wrap)
             multSubAQ = PsiFixMult(subA, self.preAddAFmt, bqf, self.inBFmt, self.mult3Fmt, PsiFixRnd.Trunc, PsiFixSat.Wrap)
         
             # real part

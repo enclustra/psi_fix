@@ -26,7 +26,7 @@ cd $old_dir
 # Library
 add_sources $LibPath {
 	en_cl_fix/vhdl/src/en_cl_fix_pkg.vhd \
-    psi_common/hdl/psi_common_array_pkg.vhd \
+	psi_common/hdl/psi_common_array_pkg.vhd \
 	psi_common/hdl/psi_common_math_pkg.vhd \
 	psi_common/hdl/psi_common_tdp_ram.vhd \
 	psi_common/hdl/psi_common_logic_pkg.vhd \
@@ -35,11 +35,11 @@ add_sources $LibPath {
 	psi_common/hdl/psi_common_par_tdm.vhd \
 	psi_common/hdl/psi_common_sync_fifo.vhd \
 	psi_common/hdl/psi_common_dyn_sft.vhd \
-  psi_common/hdl/psi_common_tdm_par.vhd \
-  psi_common/hdl/psi_common_tdm_par.vhd \
-  psi_common/hdl/psi_common_pl_stage.vhd \
-  psi_common/hdl/psi_common_multi_pl_stage.vhd \
-  psi_common/hdl/psi_common_trigger_digital.vhd \
+	psi_common/hdl/psi_common_tdm_par.vhd \
+	psi_common/hdl/psi_common_tdm_par.vhd \
+	psi_common/hdl/psi_common_pl_stage.vhd \
+	psi_common/hdl/psi_common_multi_pl_stage.vhd \
+	psi_common/hdl/psi_common_trigger_digital.vhd \
 } -tag lib
 
 # Library TB
@@ -81,8 +81,8 @@ add_sources "../hdl" {
 	psi_fix_dds_18b.vhd \
 	psi_fix_lowpass_iir_order1.vhd \
 	psi_fix_complex_mult_4m.vhd \
-    psi_fix_complex_mult_3m.vhd \
-    psi_fix_complex_mult.vhd \
+	psi_fix_complex_mult_3m.vhd \
+	psi_fix_complex_mult.vhd \
 	psi_fix_mov_avg.vhd \
 	psi_fix_demod_real2cplx.vhd \
 	psi_fix_cordic_vect.vhd \
@@ -95,8 +95,8 @@ add_sources "../hdl" {
 	psi_fix_complex_abs.vhd \
 	psi_fix_phase_unwrap.vhd \
 	psi_fix_white_noise.vhd \
-    psi_fix_noise_awgn.vhd \
-    psi_fix_fir_3tap_hbw_dec2.vhd \
+	psi_fix_noise_awgn.vhd \
+	psi_fix_fir_3tap_hbw_dec2.vhd \
 	psi_fix_cic_dec_cfg_1ch.vhd \
 	psi_fix_cic_dec_cfg_nch_par_tdm.vhd \
 	psi_fix_cic_dec_cfg_nch_tdm_tdm.vhd \
@@ -148,8 +148,8 @@ add_sources "../testbench" {
 	psi_fix_complex_abs_tb/psi_fix_complex_abs_tb.vhd \
 	psi_fix_phase_unwrap_tb/psi_fix_phase_unwrap_tb.vhd \
 	psi_fix_white_noise_tb/psi_fix_white_noise_tb.vhd \
-    psi_fix_noise_awgn_tb/psi_fix_noise_awgn_tb.vhd \
-    psi_fix_fir_3tap_hbw_dec2_tb/psi_fix_fir_3tap_hbw_dec2_tb.vhd \
+	psi_fix_noise_awgn_tb/psi_fix_noise_awgn_tb.vhd \
+	psi_fix_fir_3tap_hbw_dec2_tb/psi_fix_fir_3tap_hbw_dec2_tb.vhd \
 	psi_fix_resize_tb/psi_fix_resize_tb.vhd \
 	psi_fix_param_ram_tb/psi_fix_param_ram_tb.vhd \
 	psi_fix_cic_dec_cfg_1ch_tb/psi_fix_cic_dec_cfg_1ch_tb.vhd \
@@ -157,8 +157,8 @@ add_sources "../testbench" {
 	psi_fix_cic_dec_cfg_nch_tdm_tdm_tb/psi_fix_cic_dec_cfg_nch_tdm_tdm_tb.vhd \
 	psi_fix_sqrt_tb/psi_fix_sqrt_tb.vhd \
 	psi_fix_inv_tb/psi_fix_inv_tb.vhd \
-  psi_fix_comparator_tb/psi_fix_comparator_tb.vhd \
-  psi_fix_nch_analog_trigger_tdm_tb/psi_fix_nch_analog_trigger_tdm_tb.vhd \
+	psi_fix_comparator_tb/psi_fix_comparator_tb.vhd \
+	psi_fix_nch_analog_trigger_tdm_tb/psi_fix_nch_analog_trigger_tdm_tb.vhd \
 } -tag tb
 	
 #TB Runs
@@ -294,9 +294,9 @@ set dataDir [file normalize "../testbench/psi_fix_complex_mult_tb/Data"]
 tb_run_add_arguments 	"-gMult4_g=false -gPipeline_g=true -gFileFolder_g=$dataDir -gClkPerSpl_g=1" \
 						"-gMult4_g=false -gPipeline_g=false -gFileFolder_g=$dataDir -gClkPerSpl_g=1" \
 						"-gMult4_g=false -gPipeline_g=false -gFileFolder_g=$dataDir -gClkPerSpl_g=5" \
-                        "-gMult4_g=true -gPipeline_g=true -gFileFolder_g=$dataDir -gClkPerSpl_g=1" \
-                        "-gMult4_g=true -gPipeline_g=false -gFileFolder_g=$dataDir -gClkPerSpl_g=1" \
-                        "-gMult4_g=true -gPipeline_g=false -gFileFolder_g=$dataDir -gClkPerSpl_g=5"      
+						"-gMult4_g=true -gPipeline_g=true -gFileFolder_g=$dataDir -gClkPerSpl_g=1" \
+						"-gMult4_g=true -gPipeline_g=false -gFileFolder_g=$dataDir -gClkPerSpl_g=1" \
+						"-gMult4_g=true -gPipeline_g=false -gFileFolder_g=$dataDir -gClkPerSpl_g=5"      
 add_tb_run
 
 create_tb_run "psi_fix_mov_avg_tb"

@@ -19,14 +19,14 @@ library ieee;
 library work;
 	use work.psi_fix_pkg.all;
 	use work.psi_tb_textfile_pkg.all;
-    use work.psi_common_math_pkg.all;
+	use work.psi_common_math_pkg.all;
 
 ---------------------------------------------------------------------------------------------------
 -- Entity Declaration
 ---------------------------------------------------------------------------------------------------
 entity psi_fix_complex_mult_tb is
 	generic (
-        Mult4_g 		: boolean 		:= false;
+		Mult4_g 		: boolean 		:= false;
 		Pipeline_g 		: boolean 		:= false;
 		FileFolder_g	: string 		:= "../tesbench/psi_fix_complex_mult_full_tb/Data";
 		ClkPerSpl_g		: integer		:= 1
@@ -44,10 +44,10 @@ architecture sim of psi_fix_complex_mult_tb is
 	constant OutFmt_g : PsiFixFmt_t := (1,0,20);
 	constant Round_g : PsiFixRnd_t := PsiFixRound;
 	constant Sat_g : PsiFixSat_t := PsiFixSat;
-    
-    -- *** Response files ***
+	
+	-- *** Response files ***
 	constant FileName_c : string := choose(Mult4_g, "/output4m.txt", "/output3m.txt");
-    
+	
 	-- *** Not Assigned Generics (default values) ***
 	
 	-- *** TB Control ***
@@ -86,7 +86,7 @@ begin
 			OutFmt_g => OutFmt_g,
 			Round_g => Round_g,
 			Sat_g => Sat_g,
-            Mult4_g => Mult4_g
+			Mult4_g => Mult4_g
 		)
 		port map (
 			InClk 	=> clk_i,
