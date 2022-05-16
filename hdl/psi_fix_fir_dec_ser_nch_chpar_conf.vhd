@@ -90,31 +90,33 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chpar_conf is
 
 	-- Two process method
 	type two_process_r is record
-		Vld				: std_logic_vector(0 to 1);	
-		InSig			: InData_a(0 to 1);
-		TapWrAddr_1		: std_logic_vector(log2ceil(MaxTaps_g)-1 downto 0);
-		Tap0Addr_1		: std_logic_vector(log2ceil(MaxTaps_g)-1 downto 0);
-		DecCnt_1		: std_logic_vector(log2ceil(MaxRatio_g)-1 downto 0);
-		TapCnt_1		: std_logic_vector(log2ceil(MaxTaps_g)-1 downto 0);
-		TapRdAddr_2		: std_logic_vector(log2ceil(MaxTaps_g)-1 downto 0);
-		CoefRdAddr_2	: std_logic_vector(log2ceil(MaxTaps_g)-1 downto 0);
-		CalcOn			: std_logic_vector(1 to 6);
-		Last			: std_logic_vector(1 to 6);
-		First 			: std_logic_vector(1 to 5);
-		MultInTap_4		: InData_t;
-		MultInCoef_4	: std_logic_vector(PsiFixSize(CoefFmt_g)-1 downto 0);
-		MultOut_5		: Mult_t;
-		Accu_6			: Accu_t;
-		Rnd_7			: Rnd_t;
-		RndVld_7		: std_logic;
-		Output_8		: Out_t;
-		OutVld_8		: std_logic;
-		FirstTapLoop_3	: std_logic;
-		TapRdAddr_3 	: std_logic_vector(log2ceil(MaxTaps_g)-1 downto 0);
-		ReplaceZero_4	: std_logic;
+		Vld					: std_logic_vector(0 to 1);	
+		InSig				: InData_a(0 to 1);
+		TapWrAddr_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		Tap0Addr_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		DecCnt_1			: unsigned(log2ceil(MaxRatio_g)-1 downto 0);
+		TapCnt_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		TapWrittenCount_1	: unsigned(log2ceil(MaxTaps_g+1)-1 downto 0);
+		TapRdAddr_2			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		CoefRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		TapWrittenCount_2	: unsigned(log2ceil(MaxTaps_g+1)-1 downto 0);
+		CalcOn				: std_logic_vector(1 to 6);
+		Last				: std_logic_vector(1 to 6);
+		First 				: std_logic_vector(1 to 5);
+		MultInTap_4			: InData_t;
+		MultInCoef_4		: std_logic_vector(PsiFixSize(CoefFmt_g)-1 downto 0);
+		MultOut_5			: Mult_t;
+		Accu_6				: Accu_t;
+		Rnd_7				: Rnd_t;
+		RndVld_7			: std_logic;
+		Output_8			: Out_t;
+		OutVld_8			: std_logic;
+		TapRdAddr_3 		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		ReplaceZero_3		: std_logic;
 		-- Status
-		CalcOngoing		: std_logic;
+		CalcOngoing			: std_logic;
 	end record;
+	
 	signal r, r_next : two_process_r;
 	
 	-- Component Interface Signals
@@ -135,7 +137,8 @@ begin
 					Ratio, Taps,
 					DataRamDout_3, CoefRamDout_3)
 		variable v : two_process_r;
-		variable AccuIn_v	: std_logic_vector(PsiFixSize(AccuFmt_c)-1 downto 0);
+		variable AccuIn_v		: std_logic_vector(PsiFixSize(AccuFmt_c)-1 downto 0);
+		variable AddrPlus1_v	: unsigned(r.TapWrittenCount_1'length-1 downto 0);
 	begin
 		-- *** Hold variables stable ***
 		v := r;
@@ -157,68 +160,67 @@ begin
 		-- *** Stage 1 ***
 		-- Increment tap address after data was written
 		if r.Vld(1) = '1' then
-			v.TapWrAddr_1	:= std_logic_vector(unsigned(r.TapWrAddr_1) + 1);
+			v.TapWrAddr_1	:= r.TapWrAddr_1 + 1;
 		end if;	
 		
 		-- Decimation & Calculation Control
-		if unsigned(r.TapCnt_1) /= 0 then
-			v.TapCnt_1 	:= std_logic_vector(unsigned(r.TapCnt_1) - 1);
+		if r.TapCnt_1 /= 0 then
+			v.TapCnt_1 	:= r.TapCnt_1 - 1;
 		else
 			v.CalcOn(1)	:= '0';
 		end if;
 		
-		if unsigned(r.TapCnt_1) = 1 or unsigned(Taps) = 0 then
+		if r.TapCnt_1 = 1 or unsigned(Taps) = 0 then
 			v.Last(1) := '1';
 		else
 			v.Last(1) := '0';
 		end if;
 		
 		v.First(1) := '0';
-		if r.Vld(0) = '1' then			
-			if (unsigned(r.DecCnt_1) = 0) or (MaxRatio_g = 1) then
-				v.DecCnt_1	:= Ratio;
-				v.TapCnt_1	:= Taps;
+		if r.Vld(0) = '1' then
+			if (r.DecCnt_1 = 0) or (MaxRatio_g = 1) then
+				v.DecCnt_1	:= unsigned(Ratio);
+				v.TapCnt_1	:= unsigned(Taps);
 				v.CalcOn(1)	:= '1';
 				v.First(1) := '1';
 				v.Tap0Addr_1	:= r.TapWrAddr_1;
 			else
-				v.DecCnt_1 	:= std_logic_vector(unsigned(r.DecCnt_1) - 1);
+				v.DecCnt_1 	:= r.DecCnt_1 - 1;
 			end if;
+		end if;
+		
+		-- Keep track of how many taps have been written with valid data after reset
+		AddrPlus1_v := resize(r.TapWrAddr_1, AddrPlus1_v'length) + 1;
+		if r.Vld(1) = '1' and AddrPlus1_v > r.TapWrittenCount_1 then
+			v.TapWrittenCount_1 := AddrPlus1_v;
 		end if;
 		
 		-- *** Stage 2 ***
 		-- Tap read address
-		v.TapRdAddr_2 	:= std_logic_vector(unsigned(r.Tap0Addr_1) - unsigned(r.TapCnt_1));
+		v.TapRdAddr_2 	:= r.Tap0Addr_1 - r.TapCnt_1;
 		v.CoefRdAddr_2	:= r.TapCnt_1;
-				
+		v.TapWrittenCount_2 := r.TapWrittenCount_1;
 		
 		-- *** Stage 3 ***
 		-- Pipelining
 		v.TapRdAddr_3		:= r.TapRdAddr_2;
+		-- Set flag to overwrite invalid data with zeros
+		if r.TapWrittenCount_2 > r.TapRdAddr_2 then
+			v.ReplaceZero_3 := '0';
+		else
+			v.ReplaceZero_3 := '1';
+		end if;
 		
 		-- *** Stage 4 ***
 		-- Multiplier input registering
 		for i in 0 to Channels_g-1 loop
 			-- Replace taps that are not yet written with zeros for bittrueness
-			if r.ReplaceZero_4 = '0' or unsigned(r.TapRdAddr_3) <= unsigned(Ratio) then
+			if r.ReplaceZero_3 = '0' then
 				v.MultInTap_4(i)	:= DataRamDout_3(PsiFixSize(InFmt_g)*(i+1)-1 downto PsiFixSize(InFmt_g)*i);
 			else
 				v.MultInTap_4(i)	:= (others => '0');
 			end if;
 		end loop;
-		-- Detect when the Zero-replacement can be stopped since the taps are already filled with correct data
-		if r.FirstTapLoop_3 = '0' then
-			v.ReplaceZero_4	:= '0';
-		elsif r.CalcOn(3) = '1' then	
-			if r.First(3) = '1' and unsigned(r.TapRdAddr_3) <= unsigned(Ratio) then
-				v.ReplaceZero_4	:= '0';
-				v.FirstTapLoop_3 := '0';
-			elsif r.Last(3) = '1' then
-				v.ReplaceZero_4	:= '1';
-			elsif unsigned(r.TapRdAddr_3) = 0 then
-				v.ReplaceZero_4	:= '0';
-			end if;
-		end if;		
 		v.MultInCoef_4	:= CoefRamDout_3;
 		
 		-- *** Stage 5 *** 
@@ -287,19 +289,19 @@ begin
 	--------------------------------------------
 	p_seq : process(Clk)
 	begin	
-		if rising_edge(Clk) then	
+		if rising_edge(Clk) then
 			r <= r_next;
 			if Rst = '1' then	
 				r.Vld 				<= (others => '0');
 				r.TapWrAddr_1		<= (others => '0');
 				r.DecCnt_1			<= (others => '0');
+				r.TapWrittenCount_1	<= (others => '0');
 				r.CalcOn			<= (others => '0');
 				r.RndVld_7			<= '0';
 				r.OutVld_8			<= '0';
 				r.Last				<= (others => '0');
-				r.ReplaceZero_4		<= '1';
+				r.ReplaceZero_3		<= '1';
 				r.CalcOngoing		<= '0';
-				r.FirstTapLoop_3	<= '1';
 			end if;
 		end if;
 	end process;
@@ -323,7 +325,7 @@ begin
 				DinA		=> CoefWrData,
 				DoutA		=> CoefRdData,
 				ClkB		=> Clk,
-				AddrB		=> r.CoefRdAddr_2,
+				AddrB		=> std_logic_vector(r.CoefRdAddr_2),
 				WrB			=> '0',
 				DinB		=> (others => '0'),
 				DoutB		=> CoefRamDout_3
@@ -343,7 +345,7 @@ begin
 		p_coef_rom : process(Clk)
 		begin
 			if rising_edge(Clk) then
-				CoefRamDout_3 <= CoefRom(to_integer(unsigned(r.CoefRdAddr_2)));
+				CoefRamDout_3 <= CoefRom(to_integer(r.CoefRdAddr_2));
 			end if;
 		end process;
 		
@@ -361,20 +363,15 @@ begin
 		) 
 		port map (
 			ClkA		=> Clk,
-			AddrA		=> r.TapWrAddr_1,
+			AddrA		=> std_logic_vector(r.TapWrAddr_1),
 			WrA			=> r.Vld(1),
 			DinA		=> DataRamDin_1,
 			DoutA		=> open,
 			ClkB		=> Clk,
-			AddrB		=> r.TapRdAddr_2,
+			AddrB		=> std_logic_vector(r.TapRdAddr_2),
 			WrB			=> '0',
 			DinB		=> (others => '0'),
 			DoutB		=> DataRamDout_3
-		);		
+		);
 		
-end;	
-
-
-
-
-
+end;
