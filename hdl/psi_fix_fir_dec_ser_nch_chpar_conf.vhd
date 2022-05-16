@@ -350,23 +350,20 @@ begin
 		DataRamDin_1(PsiFixSize(InFmt_g)*(i+1)-1 downto PsiFixSize(InFmt_g)*i)	<= r.InSig(1)(i);
 	end generate;
 
-	i_data_ram : entity work.psi_common_tdp_ram
+	i_data_ram : entity work.psi_common_sdp_ram
 		generic map (
 			Depth_g		=> DataMemDepthApplied_c,
 			Width_g		=> PsiFixSize(InFmt_g)*Channels_g,
-			Behavior_g	=> RamBehavior_g
-		) 
+			IsAsync_g	=> false,
+			Behavior_g	=> "RBW"  -- Must be read-first behavior.
+		)
 		port map (
-			ClkA		=> Clk,
-			AddrA		=> std_logic_vector(r.TapWrAddr_1),
-			WrA			=> r.Vld(1),
-			DinA		=> DataRamDin_1,
-			DoutA		=> open,
-			ClkB		=> Clk,
-			AddrB		=> std_logic_vector(r.TapRdAddr_2),
-			WrB			=> '0',
-			DinB		=> (others => '0'),
-			DoutB		=> DataRamDout_3
+			Clk		=> Clk,
+			WrAddr	=> std_logic_vector(r.TapWrAddr_1),
+			Wr		=> r.Vld(1),
+			WrData	=> DataRamDin_1,
+			RdAddr	=> std_logic_vector(r.TapRdAddr_2),
+			RdData	=> DataRamDout_3
 		);
 
 end;
