@@ -96,10 +96,9 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chpar_conf is
 		Tap0Addr_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		DecCnt_1			: unsigned(log2ceil(MaxRatio_g)-1 downto 0);
 		TapCnt_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
-		TapWrittenCount_1	: unsigned(log2ceil(MaxTaps_g+1)-1 downto 0);
 		TapRdAddr_2			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		CoefRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
-		TapWrittenCount_2	: unsigned(log2ceil(MaxTaps_g+1)-1 downto 0);
+		AddrWrittenCount_2	: unsigned(log2ceil(MaxTaps_g) downto 0);  -- Truly need +1 bit (number of addresses is 2**n).
 		CalcOn				: std_logic_vector(1 to 6);
 		Last				: std_logic_vector(1 to 6);
 		First 				: std_logic_vector(1 to 5);
@@ -138,7 +137,6 @@ begin
 					DataRamDout_3, CoefRamDout_3)
 		variable v : two_process_r;
 		variable AccuIn_v		: std_logic_vector(PsiFixSize(AccuFmt_c)-1 downto 0);
-		variable AddrPlus1_v	: unsigned(r.TapWrittenCount_1'length-1 downto 0);
 	begin
 		-- *** Hold variables stable ***
 		v := r;
@@ -189,23 +187,20 @@ begin
 			end if;
 		end if;
 		
-		-- Keep track of how many taps have been written with valid data after reset
-		AddrPlus1_v := resize(r.TapWrAddr_1, AddrPlus1_v'length) + 1;
-		if r.Vld(1) = '1' and AddrPlus1_v > r.TapWrittenCount_1 then
-			v.TapWrittenCount_1 := AddrPlus1_v;
-		end if;
-		
 		-- *** Stage 2 ***
 		-- Tap read address
 		v.TapRdAddr_2 	:= r.Tap0Addr_1 - r.TapCnt_1;
 		v.CoefRdAddr_2	:= r.TapCnt_1;
-		v.TapWrittenCount_2 := r.TapWrittenCount_1;
+		-- Keep track of how many addresses have been written with valid data after reset
+		if r.Vld(1) = '1' and r.TapWrAddr_1 >= r.AddrWrittenCount_2 then
+			v.AddrWrittenCount_2 := resize(r.TapWrAddr_1, v.AddrWrittenCount_2'length) + 1;
+		end if;
 		
 		-- *** Stage 3 ***
 		-- Pipelining
 		v.TapRdAddr_3		:= r.TapRdAddr_2;
 		-- Set flag to overwrite invalid data with zeros
-		if r.TapWrittenCount_2 > r.TapRdAddr_2 then
+		if r.AddrWrittenCount_2 > r.TapRdAddr_2 then
 			v.ReplaceZero_3 := '0';
 		else
 			v.ReplaceZero_3 := '1';
@@ -292,16 +287,16 @@ begin
 		if rising_edge(Clk) then
 			r <= r_next;
 			if Rst = '1' then	
-				r.Vld 				<= (others => '0');
-				r.TapWrAddr_1		<= (others => '0');
-				r.DecCnt_1			<= (others => '0');
-				r.TapWrittenCount_1	<= (others => '0');
-				r.CalcOn			<= (others => '0');
-				r.RndVld_7			<= '0';
-				r.OutVld_8			<= '0';
-				r.Last				<= (others => '0');
-				r.ReplaceZero_3		<= '1';
-				r.CalcOngoing		<= '0';
+				r.Vld 					<= (others => '0');
+				r.TapWrAddr_1			<= (others => '0');
+				r.DecCnt_1				<= (others => '0');
+				r.AddrWrittenCount_2	<= (others => '0');
+				r.CalcOn				<= (others => '0');
+				r.RndVld_7				<= '0';
+				r.OutVld_8				<= '0';
+				r.Last					<= (others => '0');
+				r.ReplaceZero_3			<= '1';
+				r.CalcOngoing			<= '0';
 			end if;
 		end if;
 	end process;
@@ -354,7 +349,7 @@ begin
 	g_data_in : for i in 0 to Channels_g-1 generate
 		DataRamDin_1(PsiFixSize(InFmt_g)*(i+1)-1 downto PsiFixSize(InFmt_g)*i)	<= r.InSig(1)(i);
 	end generate;
-		
+
 	i_data_ram : entity work.psi_common_tdp_ram
 		generic map (
 			Depth_g		=> DataMemDepthApplied_c,
@@ -373,5 +368,5 @@ begin
 			DinB		=> (others => '0'),
 			DoutB		=> DataRamDout_3
 		);
-		
+
 end;
