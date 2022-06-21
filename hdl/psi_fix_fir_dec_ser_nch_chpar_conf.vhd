@@ -100,7 +100,7 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chpar_conf is
 		CoefRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		AddrWrittenCount_2	: unsigned(log2ceil(MaxTaps_g) downto 0);  -- Truly need +1 bit (number of addresses is 2**n).
 		CalcOn				: std_logic_vector(1 to 6);
-		Last				: std_logic_vector(1 to 6);
+		Last				: std_logic_vector(2 to 6);
 		First 				: std_logic_vector(1 to 5);
 		MultInData_4		: InData_t;
 		MultInCoef_4		: std_logic_vector(PsiFixSize(CoefFmt_g)-1 downto 0);
@@ -155,24 +155,19 @@ begin
 		end loop;
 			
 		-- *** Stage 1 ***
-		-- Increment tap address after data was written
+		-- Increment data write address immediately after data was written
 		if r.Vld(1) = '1' then
 			v.DataWrAddr_1	:= r.DataWrAddr_1 + 1;
 		end if;	
 		
-		-- Decimation & Calculation Control
+		-- Convolution calculation control
 		if r.TapCnt_1 /= 0 then
 			v.TapCnt_1 	:= r.TapCnt_1 - 1;
 		else
 			v.CalcOn(1)	:= '0';
 		end if;
 		
-		if r.TapCnt_1 = 1 or unsigned(Taps) = 0 then
-			v.Last(1) := '1';
-		else
-			v.Last(1) := '0';
-		end if;
-		
+		-- Start a convolution calculation in response to InVld (but with decimation)
 		v.First(1) := '0';
 		if r.Vld(0) = '1' then
 			if (r.DecCnt_1 = 0) or (MaxRatio_g = 1) then
@@ -193,6 +188,13 @@ begin
 		-- Keep track of how many addresses have been written with valid data after reset
 		if r.Vld(1) = '1' and r.DataWrAddr_1 >= r.AddrWrittenCount_2 then
 			v.AddrWrittenCount_2 := resize(r.DataWrAddr_1, v.AddrWrittenCount_2'length) + 1;
+		end if;
+		
+		-- Set "last" flag to mark the end of the convolution calculation
+		if r.TapCnt_1 = 0 or unsigned(Taps) = 0 then
+			v.Last(2) := '1';
+		else
+			v.Last(2) := '0';
 		end if;
 		
 		-- *** Stage 3 ***
