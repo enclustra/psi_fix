@@ -92,17 +92,17 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chpar_conf is
 	type two_process_r is record
 		Vld					: std_logic_vector(0 to 1);	
 		InSig				: InData_a(0 to 1);
-		TapWrAddr_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
-		Tap0Addr_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		DataWrAddr_1		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		Data0Addr_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		DecCnt_1			: unsigned(log2ceil(MaxRatio_g)-1 downto 0);
 		TapCnt_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
-		TapRdAddr_2			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		DataRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		CoefRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		AddrWrittenCount_2	: unsigned(log2ceil(MaxTaps_g) downto 0);  -- Truly need +1 bit (number of addresses is 2**n).
 		CalcOn				: std_logic_vector(1 to 6);
 		Last				: std_logic_vector(1 to 6);
 		First 				: std_logic_vector(1 to 5);
-		MultInTap_4			: InData_t;
+		MultInData_4		: InData_t;
 		MultInCoef_4		: std_logic_vector(PsiFixSize(CoefFmt_g)-1 downto 0);
 		MultOut_5			: Mult_t;
 		Accu_6				: Accu_t;
@@ -110,7 +110,6 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chpar_conf is
 		RndVld_7			: std_logic;
 		Output_8			: Out_t;
 		OutVld_8			: std_logic;
-		TapRdAddr_3 		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		ReplaceZero_3		: std_logic;
 		-- Status
 		CalcOngoing			: std_logic;
@@ -158,7 +157,7 @@ begin
 		-- *** Stage 1 ***
 		-- Increment tap address after data was written
 		if r.Vld(1) = '1' then
-			v.TapWrAddr_1	:= r.TapWrAddr_1 + 1;
+			v.DataWrAddr_1	:= r.DataWrAddr_1 + 1;
 		end if;	
 		
 		-- Decimation & Calculation Control
@@ -181,7 +180,7 @@ begin
 				v.TapCnt_1	:= unsigned(Taps);
 				v.CalcOn(1)	:= '1';
 				v.First(1) := '1';
-				v.Tap0Addr_1	:= r.TapWrAddr_1;
+				v.Data0Addr_1	:= r.DataWrAddr_1;
 			else
 				v.DecCnt_1 	:= r.DecCnt_1 - 1;
 			end if;
@@ -189,18 +188,17 @@ begin
 		
 		-- *** Stage 2 ***
 		-- Tap read address
-		v.TapRdAddr_2 	:= r.Tap0Addr_1 - r.TapCnt_1;
+		v.DataRdAddr_2 	:= r.Data0Addr_1 - r.TapCnt_1;
 		v.CoefRdAddr_2	:= r.TapCnt_1;
 		-- Keep track of how many addresses have been written with valid data after reset
-		if r.Vld(1) = '1' and r.TapWrAddr_1 >= r.AddrWrittenCount_2 then
-			v.AddrWrittenCount_2 := resize(r.TapWrAddr_1, v.AddrWrittenCount_2'length) + 1;
+		if r.Vld(1) = '1' and r.DataWrAddr_1 >= r.AddrWrittenCount_2 then
+			v.AddrWrittenCount_2 := resize(r.DataWrAddr_1, v.AddrWrittenCount_2'length) + 1;
 		end if;
 		
 		-- *** Stage 3 ***
 		-- Pipelining
-		v.TapRdAddr_3		:= r.TapRdAddr_2;
 		-- Set flag to overwrite invalid data with zeros
-		if r.AddrWrittenCount_2 > r.TapRdAddr_2 then
+		if r.AddrWrittenCount_2 > r.DataRdAddr_2 then
 			v.ReplaceZero_3 := '0';
 		else
 			v.ReplaceZero_3 := '1';
@@ -211,9 +209,9 @@ begin
 		for i in 0 to Channels_g-1 loop
 			-- Replace taps that are not yet written with zeros for bittrueness
 			if r.ReplaceZero_3 = '0' then
-				v.MultInTap_4(i)	:= DataRamDout_3(PsiFixSize(InFmt_g)*(i+1)-1 downto PsiFixSize(InFmt_g)*i);
+				v.MultInData_4(i)	:= DataRamDout_3(PsiFixSize(InFmt_g)*(i+1)-1 downto PsiFixSize(InFmt_g)*i);
 			else
-				v.MultInTap_4(i)	:= (others => '0');
+				v.MultInData_4(i)	:= (others => '0');
 			end if;
 		end loop;
 		v.MultInCoef_4	:= CoefRamDout_3;
@@ -221,7 +219,7 @@ begin
 		-- *** Stage 5 *** 
 		-- Multiplication
 		for i in 0 to Channels_g-1 loop
-			v.MultOut_5(i)	:= PsiFixMult(	r.MultInTap_4(i), InFmt_g,
+			v.MultOut_5(i)	:= PsiFixMult(	r.MultInData_4(i), InFmt_g,
 											r.MultInCoef_4, CoefFmt_g,
 											MultFmt_c); -- Full precision, no rounding or saturation required
 		end loop;
@@ -288,7 +286,7 @@ begin
 			r <= r_next;
 			if Rst = '1' then	
 				r.Vld 					<= (others => '0');
-				r.TapWrAddr_1			<= (others => '0');
+				r.DataWrAddr_1			<= (others => '0');
 				r.DecCnt_1				<= (others => '0');
 				r.AddrWrittenCount_2	<= (others => '0');
 				r.CalcOn				<= (others => '0');
@@ -359,10 +357,10 @@ begin
 		)
 		port map (
 			Clk		=> Clk,
-			WrAddr	=> std_logic_vector(r.TapWrAddr_1),
+			WrAddr	=> std_logic_vector(r.DataWrAddr_1),
 			Wr		=> r.Vld(1),
 			WrData	=> DataRamDin_1,
-			RdAddr	=> std_logic_vector(r.TapRdAddr_2),
+			RdAddr	=> std_logic_vector(r.DataRdAddr_2),
 			RdData	=> DataRamDout_3
 		);
 
