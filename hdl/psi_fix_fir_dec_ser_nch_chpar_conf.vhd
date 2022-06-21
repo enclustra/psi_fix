@@ -90,15 +90,17 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chpar_conf is
 
 	-- Two process method
 	type two_process_r is record
-		Vld					: std_logic_vector(0 to 1);	
-		InSig				: InData_a(0 to 1);
+		Vld					: std_logic_vector(0 to 2);
+		InSig				: InData_a(0 to 2);
 		DataWrAddr_1		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		Data0Addr_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		DecCnt_1			: unsigned(log2ceil(MaxRatio_g)-1 downto 0);
 		TapCnt_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		DataWrAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		DataRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		CoefRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
-		AddrWrittenCount_2	: unsigned(log2ceil(MaxTaps_g) downto 0);  -- Truly need +1 bit (number of addresses is 2**n).
+		AddrWrittenCount_3	: unsigned(log2ceil(MaxTaps_g) downto 0);  -- Truly need +1 bit (number of addresses is 2**n).
+		DataRdAddr_3		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		CalcOn				: std_logic_vector(1 to 6);
 		Last				: std_logic_vector(2 to 6);
 		First 				: std_logic_vector(1 to 5);
@@ -118,7 +120,7 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chpar_conf is
 	signal r, r_next : two_process_r;
 	
 	-- Component Interface Signals
-	signal DataRamDin_1		: std_logic_vector(PsiFixSize(InFmt_g)*Channels_g-1 downto 0);
+	signal DataRamDin_2		: std_logic_vector(PsiFixSize(InFmt_g)*Channels_g-1 downto 0);
 	signal DataRamDout_3	: std_logic_vector(PsiFixSize(InFmt_g)*Channels_g-1 downto 0);
 	signal CoefRamDout_3	: std_logic_vector(PsiFixSize(CoefFmt_g)-1 downto 0);
 	
@@ -182,13 +184,10 @@ begin
 		end if;
 		
 		-- *** Stage 2 ***
+		v.DataWrAddr_2 := r.DataWrAddr_1;
 		-- Tap read address
 		v.DataRdAddr_2 	:= r.Data0Addr_1 - r.TapCnt_1;
 		v.CoefRdAddr_2	:= r.TapCnt_1;
-		-- Keep track of how many addresses have been written with valid data after reset
-		if r.Vld(1) = '1' and r.DataWrAddr_1 >= r.AddrWrittenCount_2 then
-			v.AddrWrittenCount_2 := resize(r.DataWrAddr_1, v.AddrWrittenCount_2'length) + 1;
-		end if;
 		
 		-- Set "last" flag to mark the end of the convolution calculation
 		if r.TapCnt_1 = 0 or unsigned(Taps) = 0 then
@@ -198,9 +197,14 @@ begin
 		end if;
 		
 		-- *** Stage 3 ***
+		v.DataRdAddr_3 	:= r.DataRdAddr_2;
+		-- Keep track of how many addresses have been written with valid data after reset
+		if r.Vld(2) = '1' and r.DataWrAddr_2 >= r.AddrWrittenCount_3 then
+			v.AddrWrittenCount_3 := resize(r.DataWrAddr_2, v.AddrWrittenCount_3'length) + 1;
+		end if;
 		-- Pipelining
 		-- Set flag to overwrite invalid data with zeros
-		if r.AddrWrittenCount_2 > r.DataRdAddr_2 then
+		if r.AddrWrittenCount_3 > r.DataRdAddr_3 then
 			v.ReplaceZero_3 := '0';
 		else
 			v.ReplaceZero_3 := '1';
@@ -210,7 +214,7 @@ begin
 		-- Multiplier input registering
 		for i in 0 to Channels_g-1 loop
 			-- Replace taps that are not yet written with zeros for bittrueness
-			if r.ReplaceZero_3 = '0' then
+			if r.AddrWrittenCount_3 > r.DataRdAddr_3 then
 				v.MultInData_4(i)	:= DataRamDout_3(PsiFixSize(InFmt_g)*(i+1)-1 downto PsiFixSize(InFmt_g)*i);
 			else
 				v.MultInData_4(i)	:= (others => '0');
@@ -290,7 +294,7 @@ begin
 				r.Vld 					<= (others => '0');
 				r.DataWrAddr_1			<= (others => '0');
 				r.DecCnt_1				<= (others => '0');
-				r.AddrWrittenCount_2	<= (others => '0');
+				r.AddrWrittenCount_3	<= (others => '0');
 				r.CalcOn				<= (others => '0');
 				r.RndVld_7				<= '0';
 				r.OutVld_8				<= '0';
@@ -347,7 +351,7 @@ begin
 	end generate;
 		
 	g_data_in : for i in 0 to Channels_g-1 generate
-		DataRamDin_1(PsiFixSize(InFmt_g)*(i+1)-1 downto PsiFixSize(InFmt_g)*i)	<= r.InSig(1)(i);
+		DataRamDin_2(PsiFixSize(InFmt_g)*(i+1)-1 downto PsiFixSize(InFmt_g)*i)	<= r.InSig(2)(i);
 	end generate;
 
 	i_data_ram : entity work.psi_common_sdp_ram
@@ -359,9 +363,9 @@ begin
 		)
 		port map (
 			Clk		=> Clk,
-			WrAddr	=> std_logic_vector(r.DataWrAddr_1),
-			Wr		=> r.Vld(1),
-			WrData	=> DataRamDin_1,
+			WrAddr	=> std_logic_vector(r.DataWrAddr_2),
+			Wr		=> r.Vld(2),
+			WrData	=> DataRamDin_2,
 			RdAddr	=> std_logic_vector(r.DataRdAddr_2),
 			RdData	=> DataRamDout_3
 		);
