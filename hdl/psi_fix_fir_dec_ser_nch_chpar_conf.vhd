@@ -93,9 +93,9 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chpar_conf is
 		Vld					: std_logic_vector(0 to 2);
 		InSig				: InData_a(0 to 2);
 		DataWrAddr_1		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
-		Data0Addr_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		DecCnt_1			: unsigned(log2ceil(MaxRatio_g)-1 downto 0);
 		TapCnt_1			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
+		Data0Addr_2			: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		DataWrAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		DataRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
 		CoefRdAddr_2		: unsigned(log2ceil(MaxTaps_g)-1 downto 0);
@@ -184,13 +184,12 @@ begin
 		
 		-- *** Stage 2 ***
 		v.DataWrAddr_2 := r.DataWrAddr_1;
-		-- Tap read address
+		-- Data read address
 		if r.First(1) = '1' then
-			v.DataRdAddr_2 	:= r.DataWrAddr_1 - r.TapCnt_1;
-			v.Data0Addr_1	:= r.DataWrAddr_1;
-		else
-			v.DataRdAddr_2 	:= r.Data0Addr_1 - r.TapCnt_1;
+			v.Data0Addr_2	:= r.DataWrAddr_1;
 		end if;
+		v.DataRdAddr_2 	:= v.Data0Addr_2 - r.TapCnt_1; -- Note: Read v.Data0Addr_2 in same cycle.
+		-- Coefficient read address
 		v.CoefRdAddr_2	:= r.TapCnt_1;
 		
 		-- Set "last" flag to mark the end of the convolution calculation
