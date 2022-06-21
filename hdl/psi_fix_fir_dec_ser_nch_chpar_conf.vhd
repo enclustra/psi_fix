@@ -177,7 +177,6 @@ begin
 				v.TapCnt_1	:= unsigned(Taps);
 				v.CalcOn(1)	:= '1';
 				v.First(1) := '1';
-				v.Data0Addr_1	:= r.DataWrAddr_1;
 			else
 				v.DecCnt_1 	:= r.DecCnt_1 - 1;
 			end if;
@@ -186,7 +185,12 @@ begin
 		-- *** Stage 2 ***
 		v.DataWrAddr_2 := r.DataWrAddr_1;
 		-- Tap read address
-		v.DataRdAddr_2 	:= r.Data0Addr_1 - r.TapCnt_1;
+		if r.First(1) = '1' then
+			v.DataRdAddr_2 	:= r.DataWrAddr_1 - r.TapCnt_1;
+			v.Data0Addr_1	:= r.DataWrAddr_1;
+		else
+			v.DataRdAddr_2 	:= r.Data0Addr_1 - r.TapCnt_1;
+		end if;
 		v.CoefRdAddr_2	:= r.TapCnt_1;
 		
 		-- Set "last" flag to mark the end of the convolution calculation
