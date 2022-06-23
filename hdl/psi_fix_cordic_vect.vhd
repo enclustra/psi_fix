@@ -72,7 +72,7 @@ architecture rtl of psi_fix_cordic_vect is
 														2.4285117047e-06,	1.21425585242e-06,	6.0712792622e-07,	3.03563963111e-07,
 														1.51781981556e-07,	7.58909907779e-08,	3.7945495389e-08,	1.89727476945e-08,
 														9.48637384724e-09,	4.74318692362e-09,	2.37159346181e-09,	1.1857967309e-09,
-														5.92898365452e-10,	2.96449182726e-10,	1.48224591363e-10,	7.41122956816e-11);													
+														5.92898365452e-10,	2.96449182726e-10,	1.48224591363e-10,	7.41122956816e-11);
 	type AngleTable_t is array (0 to Iterations_g-1) of std_logic_vector(PsiFixSize(AngleIntFmt_g)-1 downto 0);
 	
 	function AngleTableStdlv return AngleTable_t is
@@ -98,7 +98,6 @@ architecture rtl of psi_fix_cordic_vect is
 	
 	constant GcFmt_c		: PsiFixFmt_t												:= (0, 0, 17);
 	constant AngleIntExtFmt	: PsiFixFmt_t												:= (AngleIntFmt_g.S, max(AngleIntFmt_g.I, 1), AngleIntFmt_g.F);
-    constant AbsFmt_c       : PsiFixFmt_t                                               := (InFmt_g.S, InFmt_g.I+1, InFmt_g.F);
 	constant GcCoef_c		: std_logic_vector(PsiFixSize(GcFmt_c)-1 downto 0)			:= PsiFixFromReal(1.0/CordicGain(Iterations_g), GcFmt_c);
 	constant AngInt_0_5_c	: std_logic_vector(PsiFixSize(AngleIntExtFmt)-1 downto 0)	:= PsiFixFromReal(0.5, AngleIntExtFmt);
 	constant AngInt_1_0_c	: std_logic_vector(PsiFixSize(AngleIntExtFmt)-1 downto 0)	:= PsiFixFromReal(1.0, AngleIntExtFmt);
@@ -158,15 +157,12 @@ architecture rtl of psi_fix_cordic_vect is
 								Atan_c, AngleIntFmt_g, 
 								AngleIntFmt_g, PsiFixTrunc, PsiFixWrap);
 		end if;			
-	end function;	
-	
-	-- Attributes
-    attribute use_dsp48 : string;
+	end function;
 	
 	-- Types
 	type IntArr_t is array (natural range <>) of std_logic_vector(PsiFixSize(InternalFmt_g)-1 downto 0);
 	type AngArr_t is array (natural range <>) of std_logic_vector(PsiFixSize(AngleIntFmt_g)-1 downto 0);
-		
+	
 begin
 	--------------------------------------------
 	-- Assertions
@@ -175,7 +171,8 @@ begin
 	assert OutFmt_g.S = 0 report "psi_fix_cordic_vect: OutFmt_g must be unsigned" severity error;
 	assert InternalFmt_g.S = 1 report "psi_fix_cordic_vect: InternalFmt_g must be signed" severity error;
 	assert Mode_g = "PIPELINED" or Mode_g = "SERIAL" report "psi_fix_cordic_vect: Mode_g must be PIPELINED or SERIAL" severity error;
-	assert InternalFmt_g.I > InFmt_g.I report "psi_fix_cordic_vect: InternalFmt_g must have at least one more bit than InFmt_g" severity error;
+	assert InternalFmt_g.I > InFmt_g.I report "psi_fix_cordic_vect: InternalFmt_g must have at least one more int bit than InFmt_g" severity error;
+	assert InternalFmt_g.F >= InFmt_g.F report "psi_fix_cordic_vect: Internal format must have at least as many frac bits as InFmt_g" severity error;
 	assert AngleFmt_g.S = 0 report "psi_fix_cordic_vect: AngleFmt_g must be unsigned" severity error;
 	assert AngleIntFmt_g.S = 1 report "psi_fix_cordic_vect: AngleIntFmt_g must be signed" severity error;
 	
@@ -183,14 +180,12 @@ begin
 	-- Pipelined Implementation
 	--------------------------------------------	
 	g_pipelined : if Mode_g = "PIPELINED" generate
-        signal XAbs, YAbs   : std_logic_vector(PsiFixSize(AbsFmt_c)-1 downto 0);
-        attribute use_dsp48 of XAbs, YAbs : signal is "no"; -- Never do absolute value calculation in DSP, is too slow
-        signal VldAbs       : std_logic;
-        signal QuadAbs      : std_logic_vector(1 downto 0);
-		signal X, Y		    : IntArr_t(0 to Iterations_g*PlStgPerIter_g);
-		signal Z		    : AngArr_t(0 to Iterations_g*PlStgPerIter_g);
-		signal Vld		    : std_logic_vector(0 to Iterations_g*PlStgPerIter_g);
-		signal Quad		    : t_aslv2(0 to Iterations_g*PlStgPerIter_g);
+        signal IReg, Qreg	: std_logic_vector(PsiFixSize(InFmt_g)-1 downto 0);
+        signal VldReg		: std_logic;
+		signal X, Y			: IntArr_t(0 to Iterations_g*PlStgPerIter_g);
+		signal Z			: AngArr_t(0 to Iterations_g*PlStgPerIter_g);
+		signal Vld			: std_logic_vector(0 to Iterations_g*PlStgPerIter_g);
+		signal Quad			: t_aslv2(0 to Iterations_g*PlStgPerIter_g);
 	begin
 		-- Pipelined implementation can take a sample every clock cycle
 		InRdy <= '1';
@@ -200,22 +195,22 @@ begin
 		begin
 			if rising_edge(Clk) then
 				if Rst = '1' then
-					Vld 	<= (others => '0');
-                    VldAbs  <= '0';
+					Vld		<= (others => '0');
+					VldReg	<= '0';
 					OutVld	<= '0';
 				else
-					-- Input registers
-                    VldAbs  <= InVld;
-                    XAbs    <= PsiFixAbs(InI, InFmt_g, AbsFmt_c, PsiFixTrunc, PsiFixWrap); -- truncation is okay since internal format is usually bigger than input
-                    YAbs    <= PsiFixAbs(InQ, InFmt_g, AbsFmt_c, PsiFixTrunc, PsiFixWrap); -- truncation is okay since internal format is usually bigger than input
-                    QuadAbs <= InI(InI'left) & InQ(InQ'left);
-                    
-                    -- Saturation
-                    X(0)	<= PsiFixResize(XAbs, AbsFmt_c, InternalFmt_g, PsiFixTrunc, Sat_g);
-					Y(0)	<= PsiFixResize(YAbs, AbsFmt_c, InternalFmt_g, PsiFixTrunc, Sat_g);
+					-- Input registering
+					VldReg	<= InVld;
+					IReg	<= InI;
+					Qreg	<= InQ;
+					
+					-- Map to quadrant one
+					-- No rounding or saturation because InternalFmt_g is checked to have sufficient int and frac bits
+					X(0)	<= PsiFixAbs(IReg, InFmt_g, InternalFmt_g, PsiFixTrunc, PsiFixWrap);
+					Y(0)	<= PsiFixAbs(Qreg, InFmt_g, InternalFmt_g, PsiFixTrunc, PsiFixWrap);
 					Z(0)	<= (others => '0');
-					Quad(0)	<= QuadAbs;
-					Vld(0)	<= VldAbs;                    
+					Quad(0)	<= IReg(IReg'left) & Qreg(Qreg'left);
+					Vld(0)	<= VldReg;
 					
 					-- Cordic Iterations_g
 					Vld(1 to Vld'high) <= Vld(0 to Vld'high-1);
@@ -228,9 +223,9 @@ begin
 						for k in 2 to PlStgPerIter_g loop
 							X(i*PlStgPerIter_g+k) <= X(i*PlStgPerIter_g+k-1);
 							Y(i*PlStgPerIter_g+k) <= Y(i*PlStgPerIter_g+k-1);
-							Z(i*PlStgPerIter_g+k) <= Z(i*PlStgPerIter_g+k-1); 	
+							Z(i*PlStgPerIter_g+k) <= Z(i*PlStgPerIter_g+k-1);
 						end loop;
-					end loop;					
+					end loop;
 					
 					-- Output 
 					OutVld <= Vld(Iterations_g*PlStgPerIter_g);
@@ -272,22 +267,24 @@ begin
 			if rising_edge(Clk) then
 				if Rst = '1' then
 					XinVld	<= '0';
-					IterCnt	<= 0;			
+					IterCnt	<= 0;
 					OutVld 	<= '0';
 					CordVld <= '0';
 				else
 					-- Input latching
 					if XinVld = '0' and InVld = '1' then
 						XinVld <= '1';
-						Xin		<= PsiFixAbs(InI, InFmt_g, InternalFmt_g, Round_g, Sat_g);
-						Yin		<= PsiFixAbs(InQ, InFmt_g, InternalFmt_g, Round_g, Sat_g);		
+						-- Map to quadrant one
+						-- No rounding or saturation because InternalFmt_g is checked to have sufficient int and frac bits
+						Xin		<= PsiFixAbs(InI, InFmt_g, InternalFmt_g, PsiFixTrunc, PsiFixWrap);
+						Yin		<= PsiFixAbs(InQ, InFmt_g, InternalFmt_g, PsiFixTrunc, PsiFixWrap);
 						Quadin	<= InI(InI'left) & InQ(InQ'left);
 					end if;
 					
 					-- CORDIC loop
 					CordVld <= '0';
 					if IterCnt = 0 then
-						-- start of calculation
+						-- Start of calculation
 						if XinVld = '1' then
 							X <= CordicStepX(Xin, Yin, 0);
 							Y <= CordicStepY(Xin, Yin, 0);
@@ -330,9 +327,4 @@ begin
 			end if;
 		end process;
 	end generate;
-end;	
-
-
-
-
-
+end;

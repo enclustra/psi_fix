@@ -49,7 +49,8 @@ class psi_fix_cordic_vect:
         if inFmt.S != 1:                raise ValueError("psi_fix_cordic_vect: InFmt_g must be signed")
         if outFmt.S != 0:               raise ValueError("psi_fix_cordic_vect: OutFmt_g must be unsigned")
         if internalFmt.S != 1:          raise ValueError("psi_fix_cordic_vect: InternalFmt_g must be signed")
-        if internalFmt.I <= inFmt.I:    raise ValueError("psi_fix_cordic_vect: InternalFmt_g must have at least one more bit than InFmt_g")
+        if internalFmt.I <= inFmt.I:    raise ValueError("psi_fix_cordic_vect: InternalFmt_g must have at least one more int bit than InFmt_g")
+        if internalFmt.F < inFmt.F:     raise ValueError("psi_fix_cordic_vect: Internal format must have at least as many frac bits as InFmt_g")
         if angleFmt.S != 0:             raise ValueError("psi_fix_cordic_vect: AngleFmt_g must be unsigned")
         if angleIntFmt.S != 1:          raise ValueError("psi_fix_cordic_vect: AngleIntFmt_g must be signed")
         #Implementation
@@ -89,9 +90,10 @@ class psi_fix_cordic_vect:
         :param inpQ: Imaginary-part of the input
         :return: Output as tuple (abs, angle)
         """
-        #always map to quadrant one
-        x = PsiFixAbs(PsiFixFromReal(inpI, self.inFmt), self.inFmt, self.internalFmt, self.round, self.sat)
-        y = PsiFixAbs(PsiFixFromReal(inpQ, self.inFmt), self.inFmt, self.internalFmt, self.round, self.sat)
+        # Map to quadrant one
+        # No rounding or saturation because internalFmt is checked to have sufficient int and frac bits
+        x = PsiFixAbs(PsiFixFromReal(inpI, self.inFmt), self.inFmt, self.internalFmt, PsiFixRnd.Trunc, PsiFixSat.Wrap)
+        y = PsiFixAbs(PsiFixFromReal(inpQ, self.inFmt), self.inFmt, self.internalFmt, PsiFixRnd.Trunc, PsiFixSat.Wrap)
         z = 0
         for i in range(0, self.iterations):
             x_next = self._CordicStepX(x, y, i)
@@ -134,11 +136,3 @@ class psi_fix_cordic_vect:
         add = PsiFixAdd(zLast, self.angleIntFmt, self.angleTable[iteration], self.angleIntFmt, self.angleIntFmt, PsiFixRnd.Trunc, PsiFixSat.Wrap)
         sub = PsiFixSub(zLast, self.angleIntFmt, self.angleTable[iteration], self.angleIntFmt, self.angleIntFmt, PsiFixRnd.Trunc, PsiFixSat.Wrap)
         return np.where(yLast < 0, sub, add)
-
-
-
-
-
-
-
-
