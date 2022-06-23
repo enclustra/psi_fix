@@ -35,7 +35,7 @@ entity psi_fix_cordic_vect is
 		OutFmt_g				: PsiFixFmt_t	:= (0, 2, 16);	-- Must be unsigned		$$ constant=(0,2,16) $$
 		InternalFmt_g			: PsiFixFmt_t	:= (1, 2, 22);	-- Must be signed		$$ constant=(1,2,22) $$
 		AngleFmt_g				: PsiFixFmt_t	:= (0, 0, 15);	-- Must be unsigned		$$ constant=(0,0,15) $$
-		AngleIntFmt_g			: PsiFixFmt_t	:= (1, 0, 18);	-- Must be signed		$$ constant=(1,0,18) $$
+		AngleIntFmt_g			: PsiFixFmt_t	:= (1, -1, 18);	-- Must be signed		$$ constant=(1,-1,18) $$
 		Iterations_g			: natural		:= 13;			--						$$ constant=13 $$
 		GainComp_g				: boolean		:= False;		--						$$ export=true $$
 		Round_g 				: PsiFixRnd_t	:= PsiFixTrunc;	--						$$ export=true $$
@@ -85,7 +85,7 @@ architecture rtl of psi_fix_cordic_vect is
 	end function;
 	
 	constant AngleTable_c : AngleTable_t := AngleTableStdlv;
-													
+	
 	
 	function CordicGain(iterations : integer) return real is
 		variable g : real := 1.0;
@@ -97,13 +97,10 @@ architecture rtl of psi_fix_cordic_vect is
 	end function;
 	
 	constant GcFmt_c		: PsiFixFmt_t												:= (0, 0, 17);
-	constant AngleIntExtFmt	: PsiFixFmt_t												:= (AngleIntFmt_g.S, max(AngleIntFmt_g.I, 1), AngleIntFmt_g.F);
 	constant GcCoef_c		: std_logic_vector(PsiFixSize(GcFmt_c)-1 downto 0)			:= PsiFixFromReal(1.0/CordicGain(Iterations_g), GcFmt_c);
-	constant AngInt_0_5_c	: std_logic_vector(PsiFixSize(AngleIntExtFmt)-1 downto 0)	:= PsiFixFromReal(0.5, AngleIntExtFmt);
-	constant AngInt_1_0_c	: std_logic_vector(PsiFixSize(AngleIntExtFmt)-1 downto 0)	:= PsiFixFromReal(1.0, AngleIntExtFmt);
+	constant AngInt_0_5_c	: std_logic_vector(PsiFixSize(AngleIntFmt_g)-1 downto 0)	:= PsiFixFromReal(-0.5, AngleIntFmt_g); -- arg(0.5*2pi) = arg(-0.5*2pi)
+	constant AngInt_1_0_c	: std_logic_vector(PsiFixSize(AngleIntFmt_g)-1 downto 0)	:= PsiFixFromReal(0.0, AngleIntFmt_g); -- arg(1*2pi) = arg(0*2pi)
 	
-
-
 	-- *** Functions ***
 	-- Cordic step for X
 	function CordicStepX (	xLast		: std_logic_vector;
@@ -171,17 +168,22 @@ begin
 	assert OutFmt_g.S = 0 report "psi_fix_cordic_vect: OutFmt_g must be unsigned" severity error;
 	assert InternalFmt_g.S = 1 report "psi_fix_cordic_vect: InternalFmt_g must be signed" severity error;
 	assert Mode_g = "PIPELINED" or Mode_g = "SERIAL" report "psi_fix_cordic_vect: Mode_g must be PIPELINED or SERIAL" severity error;
-	assert InternalFmt_g.I > InFmt_g.I report "psi_fix_cordic_vect: InternalFmt_g must have at least one more int bit than InFmt_g" severity error;
+	-- Note: Ignoring CORDIC growth, abs(z) still grows by up to sqrt(2) because sqrt(MAX**2 + MAX**2) = sqrt(2)*MAX.
+	--       Then, CORDIC growth is asymptotically ~1.647. So, overall growth is ~2.33 ==> +2 integer bits needed in the worst case.
+	assert InternalFmt_g.I >= InFmt_g.I+2 report "psi_fix_cordic_vect: InternalFmt_g must have at least 2 more int bits than InFmt_g" severity error;
 	assert InternalFmt_g.F >= InFmt_g.F report "psi_fix_cordic_vect: Internal format must have at least as many frac bits as InFmt_g" severity error;
+	-- Note: AngleIntFmt_g [-0.5, 0.5) is signed and AngleFmt_g [0.0, 1.0) is unsigned.
 	assert AngleFmt_g.S = 0 report "psi_fix_cordic_vect: AngleFmt_g must be unsigned" severity error;
+	assert AngleFmt_g.I = 0 report "psi_fix_cordic_vect: AngleFmt_g must have exactly 0 integer bits" severity error;
 	assert AngleIntFmt_g.S = 1 report "psi_fix_cordic_vect: AngleIntFmt_g must be signed" severity error;
+	assert AngleIntFmt_g.I = -1 report "psi_fix_cordic_vect: AngleIntFmt_g must have exactly -1 integer bits" severity error;
 	
 	--------------------------------------------
 	-- Pipelined Implementation
 	--------------------------------------------	
 	g_pipelined : if Mode_g = "PIPELINED" generate
-        signal IReg, Qreg	: std_logic_vector(PsiFixSize(InFmt_g)-1 downto 0);
-        signal VldReg		: std_logic;
+		signal IReg, Qreg	: std_logic_vector(PsiFixSize(InFmt_g)-1 downto 0);
+		signal VldReg		: std_logic;
 		signal X, Y			: IntArr_t(0 to Iterations_g*PlStgPerIter_g);
 		signal Z			: AngArr_t(0 to Iterations_g*PlStgPerIter_g);
 		signal Vld			: std_logic_vector(0 to Iterations_g*PlStgPerIter_g);
@@ -235,10 +237,11 @@ begin
 						OutAbs <= PsiFixResize(X(Iterations_g*PlStgPerIter_g), InternalFmt_g, OutFmt_g, Round_g, Sat_g);
 					end if;
 					case Quad(Iterations_g*PlStgPerIter_g) is
-						when "00"	=> 	OutAng <= PsiFixResize(Z(Iterations_g*PlStgPerIter_g), AngleIntFmt_g, AngleFmt_g, Round_g, Sat_g);
-						when "10"	=> 	OutAng <= PsiFixSub(AngInt_0_5_c, AngleIntExtFmt, Z(Iterations_g*PlStgPerIter_g), AngleIntFmt_g, AngleFmt_g, Round_g, Sat_g);
-						when "11"	=> 	OutAng <= PsiFixAdd(AngInt_0_5_c, AngleIntExtFmt, Z(Iterations_g*PlStgPerIter_g), AngleIntFmt_g, AngleFmt_g, Round_g, Sat_g);
-						when "01"	=> 	OutAng <= PsiFixSub(AngInt_1_0_c, AngleIntExtFmt, Z(Iterations_g*PlStgPerIter_g), AngleIntFmt_g, AngleFmt_g, Round_g, Sat_g);
+						-- Normalized angles are never saturated. With 1 non-fractional bit, wrapping is correct behavior.
+						when "00"	=> 	OutAng <= PsiFixResize(Z(Iterations_g*PlStgPerIter_g), AngleIntFmt_g, AngleFmt_g, Round_g, PsiFixWrap);
+						when "10"	=> 	OutAng <= PsiFixSub(AngInt_0_5_c, AngleIntFmt_g, Z(Iterations_g*PlStgPerIter_g), AngleIntFmt_g, AngleFmt_g, Round_g, PsiFixWrap);
+						when "11"	=> 	OutAng <= PsiFixAdd(AngInt_0_5_c, AngleIntFmt_g, Z(Iterations_g*PlStgPerIter_g), AngleIntFmt_g, AngleFmt_g, Round_g, PsiFixWrap);
+						when "01"	=> 	OutAng <= PsiFixSub(AngInt_1_0_c, AngleIntFmt_g, Z(Iterations_g*PlStgPerIter_g), AngleIntFmt_g, AngleFmt_g, Round_g, PsiFixWrap);
 						when others => null;
 					end case;
 				end if;
@@ -316,10 +319,11 @@ begin
 							OutAbs <= PsiFixResize(X, InternalFmt_g, OutFmt_g, Round_g, Sat_g);
 						end if;
 						case Quad is
-							when "00"	=> 	OutAng <= PsiFixResize(Z, AngleIntFmt_g, AngleFmt_g, Round_g, Sat_g);
-							when "10"	=> 	OutAng <= PsiFixSub(AngInt_0_5_c, AngleIntExtFmt, Z, AngleIntFmt_g, AngleFmt_g, Round_g, Sat_g);
-							when "11"	=> 	OutAng <= PsiFixAdd(AngInt_0_5_c, AngleIntExtFmt, Z, AngleIntFmt_g, AngleFmt_g, Round_g, Sat_g);
-							when "01"	=> 	OutAng <= PsiFixSub(AngInt_1_0_c, AngleIntExtFmt, Z, AngleIntFmt_g, AngleFmt_g, Round_g, Sat_g);
+							-- Normalized angles are never saturated. With 1 non-fractional bit, wrapping is correct behavior.
+							when "00"	=> 	OutAng <= PsiFixResize(Z, AngleIntFmt_g, AngleFmt_g, Round_g, PsiFixWrap);
+							when "10"	=> 	OutAng <= PsiFixSub(AngInt_0_5_c, AngleIntFmt_g, Z, AngleIntFmt_g, AngleFmt_g, Round_g, PsiFixWrap);
+							when "11"	=> 	OutAng <= PsiFixAdd(AngInt_0_5_c, AngleIntFmt_g, Z, AngleIntFmt_g, AngleFmt_g, Round_g, PsiFixWrap);
+							when "01"	=> 	OutAng <= PsiFixSub(AngInt_1_0_c, AngleIntFmt_g, Z, AngleIntFmt_g, AngleFmt_g, Round_g, PsiFixWrap);
 							when others => null;
 						end case;
 					end if;

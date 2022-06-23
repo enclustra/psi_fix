@@ -49,10 +49,15 @@ class psi_fix_cordic_vect:
         if inFmt.S != 1:                raise ValueError("psi_fix_cordic_vect: InFmt_g must be signed")
         if outFmt.S != 0:               raise ValueError("psi_fix_cordic_vect: OutFmt_g must be unsigned")
         if internalFmt.S != 1:          raise ValueError("psi_fix_cordic_vect: InternalFmt_g must be signed")
-        if internalFmt.I <= inFmt.I:    raise ValueError("psi_fix_cordic_vect: InternalFmt_g must have at least one more int bit than InFmt_g")
+        # Note: Ignoring CORDIC growth, abs(z) still grows by up to sqrt(2) because sqrt(1**2 + 1**2) = sqrt(2).
+        #       Then, CORDIC growth is asymptotically ~1.647. So overall growth is ~2.33 ==> +2 integer bits needed in the worst case.
+        if internalFmt.I < inFmt.I+2:   raise ValueError("psi_fix_cordic_vect: InternalFmt_g must have at least 2 more int bits than InFmt_g")
         if internalFmt.F < inFmt.F:     raise ValueError("psi_fix_cordic_vect: Internal format must have at least as many frac bits as InFmt_g")
+        # Note: AngleIntFmt_g [-0.5, 0.5) is signed and AngleFmt_g [0.0, 1.0) is unsigned.
         if angleFmt.S != 0:             raise ValueError("psi_fix_cordic_vect: AngleFmt_g must be unsigned")
+        if angleFmt.I != 0:             raise ValueError("psi_fix_cordic_vect: AngleFmt_g must have exactly 0 integer bits")
         if angleIntFmt.S != 1:          raise ValueError("psi_fix_cordic_vect: AngleIntFmt_g must be signed")
+        if angleIntFmt.I != -1:         raise ValueError("psi_fix_cordic_vect: AngleIntFmt_g must have exactly -1 integer bits")
         #Implementation
         self.inFmt = inFmt
         self.outFmt = outFmt
@@ -64,7 +69,6 @@ class psi_fix_cordic_vect:
         self.angleIntFmt = angleIntFmt
         self.gainComp = gainComp
         self.gainCompCoef = PsiFixFromReal(1/self.CordicGain, self.GAIN_COMP_FMT)
-        self.angleIntExtFmt = PsiFixFmt(angleIntFmt.S, max(angleIntFmt.I, 1), angleIntFmt.F)
         #Angle table for up to 32 iterations
         self.angleTable = PsiFixFromReal(self.ATAN_TABLE, angleIntFmt)
 
@@ -102,10 +106,11 @@ class psi_fix_cordic_vect:
             x = x_next
             y = y_next
             z = z_next
-        zQ1 = PsiFixResize(z, self.angleIntFmt, self.angleFmt, self.round, self.sat)
-        zQ2 = PsiFixSub(0.5, self.angleIntExtFmt, z, self.angleIntFmt, self.angleFmt, self.round, self.sat)
-        zQ3 = PsiFixAdd(0.5, self.angleIntExtFmt, z, self.angleIntFmt, self.angleFmt, self.round, self.sat)
-        zQ4 = PsiFixSub(1.0, self.angleIntExtFmt, z, self.angleIntFmt, self.angleFmt, self.round, self.sat)
+        # Normalized angles are never saturated. With 1 non-fractional bit, wrapping is correct behavior.
+        zQ1 = PsiFixResize(z, self.angleIntFmt, self.angleFmt, self.round, PsiFixSat.Wrap)
+        zQ2 = PsiFixSub(-0.5, self.angleIntFmt, z, self.angleIntFmt, self.angleFmt, self.round, PsiFixSat.Wrap)
+        zQ3 = PsiFixAdd(-0.5, self.angleIntFmt, z, self.angleIntFmt, self.angleFmt, self.round, PsiFixSat.Wrap)
+        zQ4 = PsiFixSub(0.0, self.angleIntFmt, z, self.angleIntFmt, self.angleFmt, self.round, PsiFixSat.Wrap)
         zOut = np.select([ np.logical_and(inpI >= 0, inpQ >= 0),
                         np.logical_and(inpI < 0, inpQ >= 0),
                         np.logical_and(inpI < 0, inpQ < 0),
