@@ -25,7 +25,8 @@ cd $old_dir
 
 # Library
 add_sources $LibPath {
-	en_cl_fix/vhdl/src/en_cl_fix_pkg.vhd \
+	en_cl_fix/hdl/en_cl_fix_private_pkg.vhd \
+	en_cl_fix/hdl/en_cl_fix_pkg.vhd \
 	psi_common/hdl/psi_common_array_pkg.vhd \
 	psi_common/hdl/psi_common_math_pkg.vhd \
 	psi_common/hdl/psi_common_tdp_ram.vhd \
@@ -41,11 +42,6 @@ add_sources $LibPath {
 	psi_common/hdl/psi_common_multi_pl_stage.vhd \
 	psi_common/hdl/psi_common_trigger_digital.vhd \
 } -tag lib
-
-# Library TB
-add_sources $LibPath {
-	en_cl_fix/vhdl/tb/en_cl_fix_pkg_tb.vhd \
-} -tag libtb
 
 # project sources
 add_sources "../hdl" {
@@ -161,10 +157,6 @@ add_sources "../testbench" {
 	psi_fix_nch_analog_trigger_tdm_tb/psi_fix_nch_analog_trigger_tdm_tb.vhd \
 } -tag tb
 	
-#TB Runs
-create_tb_run "en_cl_fix_pkg_tb"
-add_tb_run
-
 create_tb_run "psi_fix_pkg_tb"
 add_tb_run
 

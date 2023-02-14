@@ -280,7 +280,7 @@ package body psi_fix_pkg is
 	function PsiFix2ClFix(	fmt : PsiFixFmt_t)
 							return FixFormat_t is
 	begin
-		return ((fmt.S=1), fmt.I, fmt.F);
+		return (fmt.S, fmt.I, fmt.F);
 	end function;
 	
 	function PsiFix2ClFix(	fmts : PsiFixFmtArray_t)
@@ -318,7 +318,7 @@ package body psi_fix_pkg is
 	function ClFix2PsiFix(	fmt : FixFormat_t)
 							return PsiFixFmt_t is
 	begin
-		return (choose(fmt.Signed, 1, 0), fmt.Intbits, fmt.FracBits);
+		return (fmt.S, fmt.I, fmt.F);
 	end function;
 	
 	function ClFix2PsiFix(	fmts : FixFormatArray_t)
@@ -366,7 +366,7 @@ package body psi_fix_pkg is
 									aFmt 	: PsiFixFmt_t)
 									return std_logic_vector is
 	begin
-		return cl_fix_from_bits_as_int(a, PsiFix2ClFix(aFmt));
+		return cl_fix_from_integer(a, PsiFix2ClFix(aFmt));
 	end function;
 	
 	-- *** PsiFixGetBitsAsInt ***
@@ -374,7 +374,7 @@ package body psi_fix_pkg is
 									aFmt	: PsiFixFmt_t)
 									return integer is
 	begin
-		return cl_fix_get_bits_as_int(a, PsiFix2ClFix(aFmt));
+		return cl_fix_to_integer(a, PsiFix2ClFix(aFmt));
 	end function;
 	
 	-- *** PsiFixResize ***
@@ -452,7 +452,7 @@ package body psi_fix_pkg is
 							sat		: PsiFixSat_t	:= PsiFixWrap) 
 							return std_logic_vector is
 	begin
-		return cl_fix_neg(a, PsiFix2ClFix(aFmt), '1', PsiFix2ClFix(rFmt), PsiFix2ClFix(rnd), PsiFix2ClFix(sat));
+		return cl_fix_neg(a, PsiFix2ClFix(aFmt), PsiFix2ClFix(rFmt), PsiFix2ClFix(rnd), PsiFix2ClFix(sat));
 	end function;	
 	
 	-- *** PsiFixShiftLeft ***
@@ -540,15 +540,24 @@ package body psi_fix_pkg is
 	-- *** PsiFixUpperBoundReal ***
 	function PsiFixUpperBoundReal(	fmt 	: PsiFixFmt_t)
 									return real is
+		variable Range_v, Lsb_v : real;
 	begin
-		return cl_fix_max_real(PsiFix2ClFix(fmt));
+		Range_v := 2.0**fmt.I;
+		Lsb_v := 2.0**(-fmt.F);
+		return Range_v-Lsb_v;
 	end function;
 		
 	-- *** PsiFixLowerBoundReal ***
 	function PsiFixLowerBoundReal(	fmt 	: PsiFixFmt_t)
 									return real is
+		variable Range_v : real;
 	begin
-		return cl_fix_min_real(PsiFix2ClFix(fmt));
+		if fmt.S = 1 then
+			Range_v := 2.0**fmt.I;
+			return -Range_v;
+		else
+			return 0.0;
+		end if;
 	end function;
 	
 	-- *** PsiFixInRange ***
@@ -594,8 +603,12 @@ package body psi_fix_pkg is
 							aFmt		: PsiFixFmt_t;
 							b			: std_logic_vector;
 							bFmt		: PsiFixFmt_t) return boolean is
+		-- Assign to constant to force well-defined indexing
+		constant Comparison_c	: string(1 to comparison'length) := comparison;
 	begin
-		return cl_fix_compare(comparison, a, PsiFix2ClFix(aFmt), b, PsiFix2ClFix(bFmt));		
+		assert Comparison_c(1) = 'a' report "Comparison must start with 'a'" severity error;
+		assert Comparison_c(Comparison_c'length) = 'b' report "Comparison must end with 'b'" severity error;
+		return cl_fix_compare(Comparison_c(2 to Comparison_c'length-1), a, PsiFix2ClFix(aFmt), b, PsiFix2ClFix(bFmt));
 	end function;
 	
 	-- *** PsiFixFmtFromString ***

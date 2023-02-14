@@ -13,7 +13,7 @@ import os
 import sys
 import contextlib
 #Iimport en_cl_fix package
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/../../en_cl_fix/python/src")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/../../en_cl_fix/bittrue/models/python")
 from en_cl_fix_pkg import *
 
 ########################################################################################################################
@@ -65,7 +65,7 @@ class PsiFixSat(Enum):
 ########################################################################################################################
 def PsiFix2ClFix(arg):
     if type(arg) is PsiFixFmt:
-        return FixFormat(arg.S == 1, arg.I, arg.F)
+        return FixFormat(arg.S, arg.I, arg.F)
     elif type(arg) is PsiFixRnd:
         if arg == PsiFixRnd.Round: return FixRound.NonSymPos_s
         elif arg == PsiFixRnd.Trunc: return FixRound.Trunc_s
@@ -79,10 +79,7 @@ def PsiFix2ClFix(arg):
 
 def ClFix2PsiFix(arg):
     if type(arg) is FixFormat:
-        signBits = 0
-        if arg.Signed:
-            signBits = 1
-        return PsiFixFmt(signBits, arg.IntBits, arg.FracBits)
+        return PsiFixFmt(arg.S, arg.I, arg.F)
     elif type(arg) is FixRound:
         if arg == FixRound.NonSymPos_s: return PsiFixRnd.Round
         elif arg == FixRound.Trunc_s: return PsiFixRnd.Trunc
@@ -113,10 +110,10 @@ def PsiFixFromReal(a,
     return cl_fix_from_real(a, PsiFix2ClFix(rFmt), FixSaturate.Sat_s)
 
 def PsiFixFromBitsAsInt(a : int, aFmt : PsiFixFmt):
-    return cl_fix_from_bits_as_int(a, PsiFix2ClFix(aFmt))
+    return cl_fix_from_integer(a, PsiFix2ClFix(aFmt))
 
 def PsiFixGetBitsAsInt(a, aFmt : PsiFixFmt):
-    return cl_fix_get_bits_as_int(a, PsiFix2ClFix(aFmt))
+    return cl_fix_to_integer(a, PsiFix2ClFix(aFmt))
 
 def PsiFixResize(a, aFmt : PsiFixFmt,
                  rFmt : PsiFixFmt,
