@@ -32,7 +32,7 @@ inFmt = PsiFixFmt(1, 0, 15)
 outFmt = PsiFixFmt(0, 2, 16)
 intFmt = PsiFixFmt(1, 2, 22)
 angleFmt = PsiFixFmt(0,0,15)
-angleIntFmt = PsiFixFmt(1,0,18)
+angleIntFmt = PsiFixFmt(0,0,18)
 iterations = 13
 
 np.random.seed(0)

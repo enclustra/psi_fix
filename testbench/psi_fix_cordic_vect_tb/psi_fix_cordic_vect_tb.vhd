@@ -46,7 +46,7 @@ architecture sim of psi_fix_cordic_vect_tb is
 	constant OutFmt_g : PsiFixFmt_t := (0,2,16);
 	constant InternalFmt_g : PsiFixFmt_t := (1,2,22);
 	constant AngleFmt_g : PsiFixFmt_t := (0,0,15);
-	constant AngleIntFmt_g : PsiFixFmt_t := (1,0,18);
+	constant AngleIntFmt_g : PsiFixFmt_t := (0,0,18);
 	constant Iterations_g : natural := 13;
 	
 	-- *** Not Assigned Generics (default values) ***
