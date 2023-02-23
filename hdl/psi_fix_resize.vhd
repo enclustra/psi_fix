@@ -17,6 +17,7 @@ library ieee;
 	use ieee.numeric_std.all;
 	
 library work;
+	use work.en_cl_fix_pkg.all;
 	use work.psi_fix_pkg.all;
 	
 ------------------------------------------------------------------------------
@@ -51,7 +52,7 @@ end entity;
 architecture rtl of psi_fix_resize is
 
 	-- Constants
-	constant RndFmt_c	: PsiFixFmt_t	:= (InFmt_g.S, InFmt_g.I+1, OutFmt_g.F);	-- Additional bit for rounding up
+	constant RndFmt_c	: PsiFixFmt_t	:= ClFix2PsiFix(cl_fix_round_fmt(PsiFix2ClFix(InFmt_g), OutFmt_g.F, PsiFix2ClFix(Round_g)));
 
 	-- Two Process Method
 	type two_process_r is record
