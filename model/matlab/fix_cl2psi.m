@@ -10,5 +10,5 @@
 % psi   Fixed point format according to psi_fix
 %
 function psi = fix_cl2psi(cl)
-    psi = py.psi_fix_pkg.PsiFixFmt(int32(cl.Signed), int32(cl.IntBits), int32(cl.FracBits));
+    psi = py.psi_fix_pkg.PsiFixFmt(int32(cl.S), int32(cl.I), int32(cl.F));
 end

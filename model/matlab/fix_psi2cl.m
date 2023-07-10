@@ -10,9 +10,5 @@
 % psi   Fixed point format according to psi_fix
 %
 function cl = fix_psi2cl(psi)
-    boolS = false;
-    if int64(psi.S) == 1
-        boolS = true;
-    end
-    cl = cl_fix_format(boolS, int64(psi.I), int64(psi.F));
+    cl = cl_fix_format(int64(psi.S), int64(psi.I), int64(psi.F));
 end
