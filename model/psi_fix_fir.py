@@ -7,6 +7,7 @@
 ########################################################################################################################
 # Imports
 ########################################################################################################################
+from en_cl_fix_pkg import *
 from psi_fix_pkg import *
 import numpy as np
 from scipy.signal import lfilter
@@ -16,10 +17,10 @@ from scipy.signal import lfilter
 ########################################################################################################################
 class psi_fix_fir:
     """
-    General model of a fixed point FIR filter. The model represents any bittrue implementation of a FIR, independently
-    of tis RTL implementation (multi-channel, serial/parallel, etc.).
+    General model of a fixed-point FIR filter. The model represents any bittrue implementation of a FIR, independently
+    of its RTL implementation (multi-channel, serial/parallel, etc.).
 
-    It is assumed that the accumulator never wraps ans rounding/saturatio only happens at the output (accumulator would wrap)
+    It is assumed that the accumulator never wraps and rounding/saturation only happens at the output (accumulator would wrap).
     """
 
     ####################################################################################################################
@@ -27,18 +28,25 @@ class psi_fix_fir:
     ####################################################################################################################
     def __init__(self,  inFmt : PsiFixFmt,
                         outFmt : PsiFixFmt,
-                        coefFmt : PsiFixFmt):
+                        coefFmt : PsiFixFmt,
+                        accumGrowth : int = 1,
+                        rounding : PsiFixRnd = PsiFixRnd.Round,
+                        saturation : PsiFixSat = PsiFixSat.Sat):
         """
         Constructor for the FIR model object
         :param inFmt: Input fixed-point format
         :param outFmt: Output fixed-point format
         :param coefFmt: Coefficient fixed-point format
+        :param accumGrowth: Number of bits of internal growth (when accumulating the convolution)
         """
         self.inFmt = inFmt
         self.outFmt = outFmt
         self.coefFmt = coefFmt
-        self.accuFmt = PsiFixFmt(1, outFmt.I + 1, inFmt.F + coefFmt.F)
-        self.roundFmt = PsiFixFmt(self.accuFmt.S, self.accuFmt.I, self.outFmt.F)
+        multFmt = ClFix2PsiFix(FixFormat.for_mult(PsiFix2ClFix(inFmt), PsiFix2ClFix(coefFmt)))
+        self.accuFmt = PsiFixFmt(multFmt.S, multFmt.I + accumGrowth, multFmt.F)
+        self.roundFmt = ClFix2PsiFix(FixFormat.for_round(PsiFix2ClFix(self.accuFmt), outFmt.F, PsiFix2ClFix(rounding)))
+        self.rounding = rounding
+        self.saturation = saturation
 
     ####################################################################################################################
     # Public Methods and Properties
@@ -50,18 +58,6 @@ class psi_fix_fir:
         :param decimRate: Decimation ratio of the FIR filter
         :param coefficients: filter coefficients
         :return: Output data
-        """
-        sat, outp = self.FilterSatDetect(inp, decimRate, coefficients)
-        return outp
-
-    def FilterSatDetect(self, inp : np.ndarray, decimRate : int, coefficients : np.ndarray):
-        """
-        Filter data with detection of saturation
-        :param inp: Input data
-        :param decimRate: Decimation ratio of the FIR filter
-        :param coefficients: Filter coefficients
-        :return: Output data as tuple (sat, outp) where SAT is a boolean that indicates saturation and OUTP is the
-                 output data.
         """
         # Force integer (MATLAB may pass 1.0 as float)
         decimRate = int(decimRate)
@@ -79,13 +75,9 @@ class psi_fix_fir:
         if np.any(ovf):
             raise ValueError("psi_fix_fir : Internal overflow. The user must set suitable formats. See documentation.")
         # Round and truncate (wrap)
-        resRnd = PsiFixResize(res, self.accuFmt, self.roundFmt, PsiFixRnd.Round)
+        resRnd = PsiFixResize(res, self.accuFmt, self.roundFmt, self.rounding)
         # Decimate
         resDec = resRnd[::decimRate]
-        # Check saturation
-        sat = np.zeros(resDec.size)
-        sat = np.where(resDec > PsiFixUpperBound(self.outFmt), 1, sat)
-        sat = np.where(resDec < PsiFixLowerBound(self.outFmt), 1, sat)
         # Output
         outp = PsiFixResize(resDec, self.roundFmt, self.outFmt, PsiFixRnd.Trunc, PsiFixSat.Sat)  # No rounding since no fractional bits must be removed.
-        return (sat, outp)
+        return outp
