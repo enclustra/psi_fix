@@ -23,6 +23,7 @@ library ieee;
 	use ieee.numeric_std.all;
 	
 library work;
+	use work.en_cl_fix_pkg.all;
 	use work.psi_fix_pkg.all;
 	use work.psi_common_math_pkg.all;
 	use work.psi_common_array_pkg.all;
@@ -32,12 +33,13 @@ library work;
 ------------------------------------------------------------------------------
 entity psi_fix_fir_dec_ser_nch_chtdm_conf is
 	generic (
-		InFmt_g					: PsiFixFmt_t	:= (1, 0, 17);	
-		OutFmt_g				: PsiFixFmt_t	:= (1, 0, 17);	
+		InFmt_g					: PsiFixFmt_t	:= (1, 0, 17);
+		AccumGrowth_g			: natural		:= 1;  -- Must be sufficient to prevent overflow for the given coeffs.
+		OutFmt_g				: PsiFixFmt_t	:= (1, 0, 17);
 		CoefFmt_g				: PsiFixFmt_t	:= (1, 0, 17);
 		Channels_g				: natural		:= 2;
 		MaxRatio_g				: natural		:= 8;
-		MaxTaps_g				: natural		:= 1024;			
+		MaxTaps_g				: natural		:= 1024;
 		Rnd_g					: PsiFixRnd_t	:= PsiFixRound;
 		Sat_g					: PsiFixSat_t	:= PsiFixSat;
 		UseFixCoefs_g			: boolean		:= false;
@@ -79,10 +81,10 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chtdm_conf is
 	constant DataMemDepthApplied_c		: natural	:= 2**DataMemAddBits_c;
 	constant CoefMemDepthApplied_c		: natural	:= 2**log2ceil(MaxTaps_g);
 
-	-- Constants
-	constant MultFmt_c	: PsiFixFmt_t		:= (max(InFmt_g.S, CoefFmt_g.S), InFmt_g.I+CoefFmt_g.I, InFmt_g.F+CoefFmt_g.F);
-	constant AccuFmt_c	: PsiFixFmt_t		:= (1, OutFmt_g.I+1, InFmt_g.F + CoefFmt_g.F);
-	constant RndFmt_c	: PsiFixFmt_t		:= (1, OutFmt_g.I+1, OutFmt_g.F);
+	-- Fixed-point formats
+	constant MultFmt_c	: PsiFixFmt_t		:= ClFix2PsiFix(cl_fix_mult_fmt(PsiFix2ClFix(InFmt_g), PsiFix2ClFix(CoefFmt_g)));
+	constant AccuFmt_c	: PsiFixFmt_t		:= (MultFmt_c.S, MultFmt_c.I + AccumGrowth_g, MultFmt_c.F);
+	constant RndFmt_c	: PsiFixFmt_t		:= ClFix2PsiFix(cl_fix_round_fmt(PsiFix2ClFix(AccuFmt_c), OutFmt_g.F, PsiFix2ClFix(Rnd_g)));
 
 	-- types
 	subtype InData_t 	is std_logic_vector(PsiFixSize(InFmt_g)-1 downto 0);
@@ -93,7 +95,6 @@ architecture rtl of psi_fix_fir_dec_ser_nch_chtdm_conf is
 	subtype Out_t 		is  std_logic_vector(PsiFixSize(OutFmt_g)-1 downto 0);
 	type ChNr_a			is array (natural range <>) of std_logic_vector(log2ceil(Channels_g)-1 downto 0);
 	
-
 	-- Two process method
 	type two_process_r is record
 		FirstAfterRst	: std_logic;
@@ -150,6 +151,7 @@ begin
 					DataRamDout_3, CoefRamDout_3)
 		variable v : two_process_r;
 		variable AccuIn_v	: std_logic_vector(PsiFixSize(AccuFmt_c)-1 downto 0);
+		variable Dummy_v	: Accu_t;
 	begin
 		-- *** Hold variables stable ***
 		v := r;
@@ -175,7 +177,7 @@ begin
 			else
 				v.ChannelNr(0)	:= std_logic_vector(unsigned(r.ChannelNr(0)) + 1);
 			end if;
-		end if;		
+		end if;
 			
 		-- *** Stage 1 ***
 		-- Increment tap address after data was written for last channel
@@ -205,7 +207,7 @@ begin
 				v.CalcChnl_1	:= std_logic_vector(unsigned(r.CalcChnl_1) + 1);
 				v.TapCnt_1		:= Taps;
 			end if;
-		end if;		
+		end if;
 		
 		-- start of calculation and decimation
 		if r.Vld(0) = '1' then
@@ -230,7 +232,7 @@ begin
 		
 		-- Tap read address
 		v.TapRdAddr_2 	:= std_logic_vector(unsigned(r.Tap0Addr_1) - unsigned(r.TapCnt_1));
-		v.CoefRdAddr_2	:= r.TapCnt_1;			
+		v.CoefRdAddr_2	:= r.TapCnt_1;
 		
 		-- *** Stage 3 ***
 		-- Pipelining
@@ -274,20 +276,26 @@ begin
 		else
 			AccuIn_v := r.Accu_6;
 		end if;
+		-- AccumGrowth_g must be sufficient to prevent overflow here
 		v.Accu_6	:= PsiFixAdd(	r.MultOut_5, MultFmt_c,
 									AccuIn_v, AccuFmt_c,
-									AccuFmt_c); -- Overflows compensate at the end of the calculation and rounding not required
-	
+									AccuFmt_c);
+		-- As a precaution, we generate a simulation warning if overflow occurs
+--synthesis translate_off
+		if r.CalcOn(5) = '1' then
+			Dummy_v	:= cl_fix_add(	r.MultOut_5, PsiFix2ClFix(MultFmt_c),
+									AccuIn_v, PsiFix2ClFix(AccuFmt_c),
+									PsiFix2ClFix(AccuFmt_c), Trunc_s, Warn_s);
+		end if;
+--synthesis translate_on
+		
 		-- *** Stage 7 ***
 		-- Rounding
-		v.RndVld_7 := '0';
-		if r.Last(6) = '1' then
-			v.Rnd_7		:= PsiFixResize(r.Accu_6, AccuFmt_c, RndFmt_c, Rnd_g, PsiFixWrap);
-			v.RndVld_7 	:= r.CalcOn(6);
-		end if;	
+		v.RndVld_7 := r.CalcOn(6) and r.Last(6);
+		v.Rnd_7 := PsiFixResize(r.Accu_6, AccuFmt_c, RndFmt_c, Rnd_g, PsiFixWrap);
 		
 		-- *** Stage 8 ***
-		-- Output Handling and saturation
+		-- Saturation
 		v.OutVld_8 := r.RndVld_7;
 		v.Output_8 := PsiFixResize(r.Rnd_7, RndFmt_c, OutFmt_g, PsiFixTrunc, Sat_g);
 		
@@ -297,26 +305,24 @@ begin
 		else
 			v.CalcOngoing := '0';
 		end if;
-				
+		
 		-- *** Outputs ***
 		OutVld	<= r.OutVld_8;
-		OutData	<= r.Output_8;		
+		OutData	<= r.Output_8;
 		CalcOngoing	<= r.CalcOngoing or r.Vld(0);
 		
 		-- *** Assign to signal ***
 		r_next <= v;
 	end process;
 	
-
-	
 	--------------------------------------------
 	-- Sequential Process
 	--------------------------------------------
 	p_seq : process(Clk)
-	begin	
-		if rising_edge(Clk) then	
+	begin
+		if rising_edge(Clk) then
 			r <= r_next;
-			if Rst = '1' then	
+			if Rst = '1' then
 				r.Vld 				<= (others => '0');
 				r.ChannelNr(0)		<= (others => '0');
 				r.CalcChnl_1		<= (others => '0');
@@ -387,7 +393,7 @@ begin
 			Depth_g		=> DataMemDepthApplied_c*Channels_g,
 			Width_g		=> PsiFixSize(InFmt_g),
 			Behavior_g	=> RamBehavior_g
-		) 
+		)
 		port map (
 			ClkA		=> Clk,
 			AddrA		=> DataRamWrAddr_1,
@@ -399,9 +405,9 @@ begin
 			WrB			=> '0',
 			DinB		=> (others => '0'),
 			DoutB		=> DataRamDout_3
-		);		
+		);
 		
-end;	
+end;
 
 
 
